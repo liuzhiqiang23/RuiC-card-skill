@@ -13,22 +13,84 @@
  * project directory, its own viewer server — no manual setup, nothing left
  * running except when --keep-server is passed.
  *
+ * It runs headless on macOS, Windows and Linux, including root and containers: on
+ * Linux the Chromium sandbox is disabled and /dev/shm is bypassed, because CI images
+ * and root shells cannot start it otherwise.
+ *
  * Usage:
  *   node scripts/verify_web.mjs <project-dir | url> [--out DIR] [--browser PATH]
  *                               [--only desktop|mobile] [--keep-server]
+ *
+ * Set --browser (or RUIC_BROWSER) to name the Chromium-family executable; otherwise
+ * the usual install locations, PATH and Playwright's browser cache are searched.
  *
  * Exit code is 0 only when every check passed. Screenshots and report.json land
  * in <project>/verification by default.
  */
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { accessSync, constants, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import net from "node:net";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const sha = (buf) => createHash("sha256").update(buf).digest("hex").slice(0, 16);
+const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+/** Read a downloaded file's own bytes: is it a PNG, and at what pixel size. */
+function describeDownload(name, buf) {
+  const png = buf.length >= 8 && buf.subarray(0, 8).equals(PNG_MAGIC);
+  const size = png && buf.length >= 24 ? `${buf.readUInt32BE(16)}x${buf.readUInt32BE(20)}px` : "unreadable header";
+  return { name, bytes: buf.length, png, size };
+}
+
+/** PATH lookup, no shell involved — a bare name is only a hit when it really resolves. */
+function which(name) {
+  const exts = process.platform === "win32" ? (process.env.PATHEXT || ".EXE;.CMD;.BAT").split(";") : [""];
+  for (const dir of (process.env.PATH || "").split(path.delimiter)) {
+    if (!dir) continue;
+    for (const ext of exts) {
+      const full = path.join(dir, name + ext);
+      try {
+        accessSync(full, constants.X_OK);
+        return full;
+      } catch {}
+    }
+  }
+  return null;
+}
+
+/** A path resolves only if it exists; a bare name has to be found on PATH. */
+const resolveBrowser = (candidate) =>
+  candidate.includes("/") || candidate.includes("\\") ? (existsSync(candidate) ? candidate : null) : which(candidate);
+
+/** Chromium builds already downloaded by Playwright, newest revision first. */
+function playwrightBrowsers() {
+  // Only the full builds: chromium_headless_shell-* ships without --headless=new.
+  const tail = {
+    linux: ["chrome-linux", "chrome"],
+    darwin: ["chrome-mac", "Chromium.app", "Contents", "MacOS", "Chromium"],
+    win32: ["chrome-win", "chrome.exe"],
+  }[process.platform];
+  if (!tail) return [];
+  const roots = [
+    process.env.PLAYWRIGHT_BROWSERS_PATH,
+    process.env.XDG_CACHE_HOME ? path.join(process.env.XDG_CACHE_HOME, "ms-playwright") : null,
+    path.join(homedir(), ".cache", "ms-playwright"),
+    path.join(homedir(), "Library", "Caches", "ms-playwright"),
+  ].filter(Boolean);
+  const found = [];
+  for (const root of roots) {
+    if (!existsSync(root)) continue;
+    for (const entry of readdirSync(root)) {
+      if (!/^chromium-\d+$/.test(entry)) continue;
+      const exe = path.join(root, entry, ...tail);
+      if (existsSync(exe)) found.push({ revision: Number(entry.slice("chromium-".length)), exe });
+    }
+  }
+  return found.sort((a, b) => b.revision - a.revision).map((f) => f.exe);
+}
 
 // ---------------------------------------------------------------- arguments
 const argv = process.argv.slice(2);
@@ -59,26 +121,36 @@ const downloadDir = mkdtempSync(path.join(tmpdir(), "holo-dl-"));
 mkdirSync(outDir, { recursive: true });
 
 // ---------------------------------------------------------------- browser
-const BROWSERS = [
-  process.env.RUIC_BROWSER,
-  flag("--browser"),
+// Explicitly requested first (and then it has to work), then the usual install
+// locations, then the bare names on PATH, then Playwright's own downloads.
+const requested = [process.env.RUIC_BROWSER, flag("--browser")].filter((v) => typeof v === "string" && v);
+const CANDIDATES = [
   "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
   "/Applications/Chromium.app/Contents/MacOS/Chromium",
   "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+  "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+  "C:/Program Files/Google/Chrome/Application/chrome.exe",
   "msedge",
   "google-chrome",
   "google-chrome-stable",
   "chromium",
   "chromium-browser",
-  "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
-  "C:/Program Files/Google/Chrome/Application/chrome.exe",
-].filter(Boolean);
-const browser = BROWSERS.find((p) => (p.includes("/") || p.includes("\\") ? existsSync(p) : true));
+];
+const browser = requested.length
+  ? requested.map(resolveBrowser).find(Boolean) || null
+  : [...CANDIDATES, ...playwrightBrowsers()].map(resolveBrowser).find(Boolean) || null;
 if (!browser) {
-  console.error("No Chromium-family browser found. Pass --browser <path-to-msedge-or-chrome>.");
+  console.error(
+    requested.length
+      ? `The requested browser is not runnable here: ${requested.join(", ")}\n` +
+        "Unset RUIC_BROWSER / drop --browser, or point it at a Chromium-family browser."
+      : "No Chromium-family browser found. Pass --browser <path-to-msedge-or-chrome> or set RUIC_BROWSER.\n" +
+        "Looked at the usual install locations, PATH, and Playwright's browser cache.",
+  );
   process.exit(2);
 }
+console.log(`browser: ${browser}`);
 
 const freePort = () =>
   new Promise((resolve, reject) => {
@@ -110,6 +182,7 @@ class Cdp {
     this.pending = new Map();
     this.consoleErrors = [];
     this.failedRequests = [];
+    this.downloadNames = [];
     ws.addEventListener("message", (ev) => {
       const msg = JSON.parse(ev.data);
       if (msg.id && this.pending.has(msg.id)) {
@@ -118,6 +191,7 @@ class Cdp {
         msg.error ? reject(new Error(JSON.stringify(msg.error))) : resolve(msg.result);
         return;
       }
+      if (msg.method === "Browser.downloadWillBegin") this.downloadNames.push(msg.params?.suggestedFilename || "");
       if (msg.method === "Runtime.exceptionThrown") this.consoleErrors.push("exception: " + (msg.params?.exceptionDetails?.text || "?"));
       if (msg.method === "Log.entryAdded" && msg.params?.entry?.level === "error") this.consoleErrors.push("log: " + msg.params.entry.text);
       if (msg.method === "Runtime.consoleAPICalled" && msg.params?.type === "error")
@@ -158,14 +232,22 @@ async function launch({ width, height, extraFlags = [] }, out) {
       "--hide-scrollbars",
       "--no-first-run",
       "--no-default-browser-check",
+      // Linux only: the sandbox cannot start as root or in a container without user
+      // namespaces, and /dev/shm is typically 64 MB there, which swiftshader fills.
+      // macOS and Windows run sandboxed as before.
+      ...(process.platform === "linux" ? ["--no-sandbox", "--disable-dev-shm-usage"] : []),
       `--window-size=${width},${height}`,
       `--user-data-dir=${profile}`,
       `--remote-debugging-port=${port}`,
       ...extraFlags,
       "about:blank",
     ],
-    { stdio: "ignore", detached: false },
+    { stdio: ["ignore", "ignore", "pipe"], detached: false },
   );
+  let stderr = "";
+  child.stderr.on("data", (chunk) => {
+    stderr = (stderr + chunk).slice(-2000);
+  });
   let targetInfo = null;
   for (let i = 0; i < 60; i++) {
     await sleep(500);
@@ -175,7 +257,11 @@ async function launch({ width, height, extraFlags = [] }, out) {
       if (targetInfo) break;
     } catch {}
   }
-  if (!targetInfo) throw new Error("headless browser did not expose a page target");
+  if (!targetInfo) {
+    try { child.kill("SIGKILL"); } catch {}
+    try { rmSync(profile, { recursive: true, force: true }); } catch {}
+    throw new Error(`${browser} did not expose a page target${stderr.trim() ? `:\n${stderr.trim()}` : ""}`);
+  }
   const ws = new WebSocket(targetInfo.webSocketDebuggerUrl);
   await new Promise((r, j) => {
     ws.addEventListener("open", r, { once: true });
@@ -383,16 +469,37 @@ async function desktopPass(base, out) {
     // The screenshot button renders at 1400x1800 and runs toDataURL synchronously:
     // under software GL that keeps the renderer busy for a long time afterwards, so
     // it is the last probe of the pass and the click is scheduled, not awaited.
-    await cdp.send("Page.setDownloadBehavior", { behavior: "allow", downloadPath: downloadDir });
+    //
+    // The check reads the downloaded bytes rather than the file name. A non-ASCII
+    // card title is the reason: headless Chromium under a non-UTF-8 Linux locale
+    // drops the `a.download` name and lands the file as an extensionless "download",
+    // while the PNG itself is intact. A real browser names it correctly and the
+    // download event still reports what the page asked for, so both are reported
+    // and the bytes are what has to hold.
+    await cdp.send("Browser.setDownloadBehavior", { behavior: "allow", downloadPath: downloadDir, eventsEnabled: true });
     await cdp.eval("setTimeout(()=>document.getElementById('save').click(),0); 'scheduled'");
-    let downloaded = [];
+    let downloads = [];
     for (let i = 0; i < 40; i++) {
       await sleep(2000);
-      downloaded = readdirSync(downloadDir).filter((f) => f.endsWith(".png"));
-      if (downloaded.length) break;
+      const names = readdirSync(downloadDir).filter((f) => !f.endsWith(".crdownload"));
+      if (names.length) {
+        downloads = names.map((name) => describeDownload(name, readFileSync(path.join(downloadDir, name))));
+        break;
+      }
     }
-    check("screenshot button downloads a card PNG", downloaded.length > 0, downloaded.length ? `got ${downloaded.join(",")}` : "no PNG appeared within 80s");
-    return { checks, errors, failedRequests, downloaded };
+    const shot = downloads[0];
+    const dims = shot && /^\d+x\d+px$/.test(shot.size) ? shot.size.match(/\d+/g).map(Number) : null;
+    const expectedName = `${meta.cfgTitle || "art-card"}-front.png`;
+    const requestedName = cdp.downloadNames.at(-1) || "";
+    check(
+      "screenshot button saves a card PNG at full resolution",
+      !!shot && shot.png && shot.bytes > 1000 && !!dims && dims[0] >= 1200 && dims[1] > dims[0],
+      shot
+        ? `${shot.size}, ${shot.bytes} B as "${shot.name}"` +
+          (shot.name === (requestedName || expectedName) ? " (named as requested)" : `, browser asked for "${requestedName || expectedName}" — headless name handling, see note above`)
+        : "no file appeared within 80s",
+    );
+    return { checks, errors, failedRequests, downloads, requestedDownloadName: requestedName };
   } finally {
     close();
   }
@@ -474,7 +581,13 @@ let failed = 0;
 try {
   if (only !== "mobile") {
     const d = await desktopPass(base, outDir);
-    report.passes.desktop = { checks: d.checks, consoleErrors: d.errors, failedRequests: d.failedRequests, downloads: d.downloaded };
+    report.passes.desktop = {
+      checks: d.checks,
+      consoleErrors: d.errors,
+      failedRequests: d.failedRequests,
+      downloads: d.downloads,
+      requestedDownloadName: d.requestedDownloadName,
+    };
     failed += d.checks.filter((c) => !c.pass).length;
   }
   if (only !== "desktop") {

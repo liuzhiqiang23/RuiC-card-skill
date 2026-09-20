@@ -1,6 +1,6 @@
 # ✦ RuiC Card Skill
 
-> 一个 **Codex Skill**：把小时候文具店门口那种会闪的全息卡**复刻**到浏览器里。
+> 一个 **通用 Agent Skill（不绑定 Codex）**：把小时候文具店门口那种会闪的全息卡**复刻**到浏览器里。
 > 说一句话，就得到一张会随视角流光、带层次景深的 3D 闪卡网页，外加一个可以随便改的 Blender 工程。
 
 小时候买不起的闪卡，现在你想印谁就印谁。这是你的私人卡牌工坊。
@@ -43,7 +43,7 @@
 - **真 3D 层次景深**：主体前凸、背景后缩，层与层随视角错开，不是一张平面贴图
 - **视点流光**：镭射彩虹的相位跟着视角走，转到哪闪到哪；烫金 / 银箔 / 珠光 / 原画四种卡面质感
 - **浏览器里随便玩**：拖拽旋转、翻面、景深/光泽/画面比例滑块，手机横竖屏都适配
-- **出厂自带验收**：`node scripts/verify_web.mjs <项目>` 自己拉起无头浏览器和本地服务，把拖拽、翻面、缩放、键盘、五个滑块、四种质感、截图下载、390px 窄屏、减动效逐项跑完，并且比对**真实画面帧**（不是只看滑杆读数变没变），报告和截图落进 `verification/`
+- **出厂自带验收**：`node scripts/verify_web.mjs <项目>` 自己拉起无头浏览器和本地服务，把拖拽、翻面、缩放、键盘、五个滑块、四种质感、截图下载、390px 窄屏、减动效逐项跑完，并且比对**真实画面帧**（不是只看滑杆读数变没变），报告和截图落进 `verification/`。macOS / Windows / Linux 都能跑，无 GUI 的容器与 root 环境同样直接可用
 - **免装 Blender**：官方便携版自动下载、SHA-256 校验后装进项目目录，不污染系统环境
 - **网页零依赖请求**：查看器打包成单文件（three + 图标全部内联），广告拦截插件无从下手；即使浏览器关了硬件加速，也有 CSS-3D 分层兜底，绝不会白屏
 - **可编辑交付**：`card.blend` 真工程 + 透明分层 PNG + `card-config.json`，想改哪层改哪层
@@ -55,7 +55,7 @@
 
 ### 安装
 
-把这个目录放进 Codex 的 skills 目录（目录名即 skill 名）：
+skill 本体就是 `SKILL.md` + Markdown + 纯 Python/Node 脚本，**不绑定 Codex**——任何读 `SKILL.md` 的宿主都能装，放进它自己的 skills 目录即可（目录名即 skill 名）。Codex 的默认位置是：
 
 ```
 ~/.codex/skills/RuiC-card-skill/
@@ -63,9 +63,10 @@
 
 ### 环境
 
-- Python 3 + Pillow
+- Python **3.9+** + Pillow（`ensure_blender.py` 用了 `Path.is_relative_to`，3.6 / 3.8 上会直接报错）
 - Node.js + npm
-- Blender **不用自己装**——流水线自动把官方便携版放到 `<project>/tools/`，校验 SHA-256
+- Blender **不用自己装**——流水线自动把官方便携版放到 `<project>/tools/`，校验 SHA-256。官方源在你的网络里被墙时，用 `RUIC_BLENDER_BASE` 指向镜像即可（例：`RUIC_BLENDER_BASE=https://mirrors.aliyun.com/blender/Blender4.5/`）；校验值取自同一个源，所以镜像要自己信得过
+- 验收脚本需要一个 Chromium 内核浏览器：系统装的 Chrome / Edge / Chromium 都行，Playwright 缓存里的 Chromium 也认，还可以用 `RUIC_BROWSER` 或 `--browser` 指定路径。**无 GUI 的 Linux（含 root / 容器）可以直接跑**：脚本在 Linux 上自动补 `--no-sandbox --disable-dev-shm-usage`
 
 ### 开口
 

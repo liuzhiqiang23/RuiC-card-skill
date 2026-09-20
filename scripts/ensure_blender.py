@@ -1,7 +1,14 @@
-"""Find Blender or install a checksum-verified official portable copy in a project."""
+"""Find Blender or install a checksum-verified official portable copy in a project.
+
+Downloads come from the official Blender release directory unless RUIC_BLENDER_BASE
+names another base URL. The .sha256 for the package is fetched from that same base, so
+a mirror protects against a corrupt or truncated transfer, not against the mirror
+itself — point it at a source you trust, and leave it unset to take the official one.
+"""
 from pathlib import Path
-import argparse,hashlib,platform,re,shutil,subprocess,tarfile,urllib.request,zipfile
-BASE='https://download.blender.org/release/Blender4.5/'
+import argparse,hashlib,os,platform,re,shutil,subprocess,tarfile,urllib.request,zipfile
+DEFAULT_BASE='https://download.blender.org/release/Blender4.5/'
+BASE=(os.environ.get('RUIC_BLENDER_BASE') or DEFAULT_BASE).rstrip('/')+'/'
 def find_blender(project,override=None):
     candidates=[]
     if override:candidates.append(Path(override))
