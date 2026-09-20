@@ -1,11 +1,11 @@
 ---
 name: RuiC-card-skill
-description: Generate interactive 3D holographic collectible-card websites from a user description or reference image, using layered artwork, Blender and Three.js. Includes project-local Blender installation, reusable parallax materials and browser verification. Use when the user asks for 全息闪卡, 镭射卡, 3D 卡牌网页, a holographic collectible card site, or an editable card.blend.
+description: Generate interactive 3D holographic collectible-card websites from a user description or reference image, using layered artwork, Blender and Three.js. Includes project-local Blender installation, reusable parallax materials and browser verification. Host-agnostic — any harness that runs a multimodal model can use it, since the model draws the layer artwork and inspects the rendered frames. Use when the user asks for 全息闪卡, 镭射卡, 3D 卡牌网页, a holographic collectible card site, or an editable card.blend.
 ---
 
 # RuiC Card Skill
 
-Turn the user's description or uploaded reference into a finished, editable Blender card and an interactive Three.js page. Preserve the requested subject, style, typography and destination. This skill contains code and text only; generated artwork belongs in the user's output project.
+Turn the user's description or uploaded reference into a finished, editable Blender card and an interactive Three.js page. Preserve the requested subject, style, typography and destination. This skill contains code and text only; generated artwork belongs in the user's output project. It is host-agnostic — nothing in it is specific to one harness or one vendor's model — and it needs a multimodal model: you produce the layer artwork and you look at the rendered frames, so the host has to be able to generate and inspect images.
 
 ## The layer stack
 
