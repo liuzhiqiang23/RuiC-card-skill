@@ -27,6 +27,8 @@
 
 [▶ 观看调整前完整视频](assets/demo-before.mp4)
 
+演示效果由 **DeepSeek V4.1 Flash** 实现。
+
 ### 调整后 · 层距收紧（现默认）
 
 调整后：各层收近一档，卡片整体更紧凑，仍保留层次景深——这是当前出厂默认效果：
@@ -34,6 +36,8 @@
 ![调整后效果](assets/demo-after.gif)
 
 [▶ 观看调整后完整视频](assets/demo-after.mp4)
+
+演示效果由 **DeepSeek V4.1 Flash** 实现。
 
 ---
 
