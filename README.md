@@ -65,6 +65,17 @@
 
 skill 本体就是 `SKILL.md` + Markdown + 纯 Python/Node 脚本，**不绑定任何宿主，也不绑定任何一家模型**——只要宿主能读 `SKILL.md`、并且跑的是**多模态模型**（能生成图像、能看图），把它放进宿主的 skills 目录就能用（目录名即 skill 名；通用约定是 `~/.agents/skills/`，别的宿主换成自己的 skills 目录即可）。
 
+### 安装到 DeepSeek Harness（dsh）
+
+已实测兼容 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（dsh 0.1.5-rc.3，`skill-filesystem` 提供者）：把本仓库拷进 dsh 的用户技能根，目录名用 `ruic-card`：
+
+```bash
+git clone https://github.com/liuzhiqiang23/RuiC-card-skill.git
+cp -r RuiC-card-skill ~/.dsh/skills/ruic-card
+```
+
+新会话的技能目录里即出现 `ruic-card`（`~/.dsh/skills` 是 dsh 的用户级扫描根，改动热监听、无需重启）。
+
 ### 环境
 
 - 模型：**多模态**（要能出图、也要能看图判断渲染帧；纯文本模型做不了这两步）
