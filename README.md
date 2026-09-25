@@ -1,5 +1,8 @@
 # ✦ RuiC Card Skill
 
+> **🔗 原作者与来源**：本仓库 fork 自 [HRuiCcc/RuiC-card-skill](https://github.com/HRuiCcc/RuiC-card-skill)——技能的设计与实现全部出自原作者 **HRuiCcc**，MIT 许可（见 [LICENSE](./LICENSE)）。
+> 本仓库不改动上游代码；ZCode 插件市场的适配与打包进展见 [zai-org/zcode-plugins#21](https://github.com/zai-org/zcode-plugins/pull/21)。
+
 > 一个**通用 Agent Skill**：不挑宿主，**多模态模型都能用**——把小时候文具店门口那种会闪的全息卡**复刻**到浏览器里。
 > 说一句话，就得到一张会随视角流光、带层次景深的 3D 闪卡网页，外加一个可以随便改的 Blender 工程。
 
@@ -188,5 +191,5 @@ python scripts/package_skill.py RuiC-card-skill --out ~/Desktop/RuiC-card-skill.
 
 <div align="center">
   <img src="assets/wechat-donate.png" width="300" alt="微信赞赏码" />
-  <p><strong>微信扫码赞赏</strong></p>
+  <p><strong>微信扫码赞赏（原作者 HRuiCcc 的赞赏码）</strong></p>
 </div>
